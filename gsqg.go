@@ -186,6 +186,6 @@ func (ref *SQG) getDeleteMessage(contentRef interface{}, dataAttrRef interface{}
 // reviewMessageOK: Informa se ocorreu leitura de uma mensagem
 // deleteMessageOk: Informa se a mensagem foi deletada
 // errorGetDelMessage: Erro de processamento
-func (ref *SQG) GetMessage(contentRef interface{}, dataAttrRef interface{}) (reviewMessageOK bool, deleteMessageOk bool, errorGetDelMessage error) {
+func (ref *SQG) GetMsgInQueue(contentRef interface{}, dataAttrRef interface{}) (reviewMessageOK bool, deleteMessageOk bool, errorGetDelMessage error) {
 	return ref.getDeleteMessage(contentRef, dataAttrRef)
 }
