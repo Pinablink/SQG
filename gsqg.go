@@ -180,12 +180,7 @@ func (ref *SQG) getDeleteMessage(contentRef interface{}, dataAttrRef interface{}
 	return reviewMessage, deleteMessageOK, iErr
 }
 
-// GetMessage Obtêm a mensagem da fila e é um Wrapper para a func getDeleteMessage
-// contentRef: Referência do Conteúdo da Mensagem
-// dataAttrRef: Dados de cabeçalho da Mensagem
-// reviewMessageOK: Informa se ocorreu leitura de uma mensagem
-// deleteMessageOk: Informa se a mensagem foi deletada
-// errorGetDelMessage: Erro de processamento
+//
 func (ref *SQG) GetMsgInQueue(contentRef interface{}, dataAttrRef interface{}) (reviewMessageOK bool, deleteMessageOk bool, errorGetDelMessage error) {
 	return ref.getDeleteMessage(contentRef, dataAttrRef)
 }
