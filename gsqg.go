@@ -1,13 +1,10 @@
 package sqg
 
 import (
-	"bytes"
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
 
 	"github.com/Pinablink/sqg/messagequeue"
 	"github.com/Pinablink/sqg/util"
@@ -43,10 +40,7 @@ func (ref *SQG) SetGSQGMessageModel(refMessageModel util.GSQGMessageModel) {
 }
 
 //
-func (ref *SQG) serializeStruct() (error, string) {
-	var mBuffer bytes.Buffer
-	var strData string
-	encoder := base64.NewEncoder(base64.StdEncoding, &mBuffer)
+func (ref *SQG) parseStruct() (error, string) {
 
 	dataObjectByte, err := json.Marshal(ref.sQGStruct.ContentMessage)
 
@@ -54,38 +48,12 @@ func (ref *SQG) serializeStruct() (error, string) {
 
 		messageErrorReturn := fmt.Sprintf(util.NOT_SERIALIZE_STR_BASE64, ref.sqgUUID)
 		return errors.New(messageErrorReturn), ""
-
-	} else {
-
-		defer encoder.Close()
-		strData = string(dataObjectByte)
-		encoder.Write([]byte(strData))
-
 	}
 
-	return nil, mBuffer.String()
+	return nil, string(dataObjectByte)
 }
 
-//
-func (ref *SQG) deserializeStruct(strBase64Ref string) {
-
-	var aDataByte = []byte(strBase64Ref)
-	var reader *bytes.Reader = bytes.NewReader(aDataByte)
-
-	decoder := base64.NewDecoder(base64.StdEncoding, reader)
-
-	// RETORNAR ESSA ESTRUTURA
-	//dataByte, err := ioutil.ReadAll(decoder)
-	_, err := ioutil.ReadAll(decoder)
-
-	if err != nil {
-		// Implementar retorno do erro
-		fmt.Println("Erro no Decode")
-	}
-
-}
-
-// JoinTheQueue : Adiciona os dados de util.GSQGMessageModel a fila SQS em formato String64
+// JoinTheQueue : Adiciona os dados de util.GSQGMessageModel a fila SQS
 func (ref *SQG) JoinTheQueue() (*string, error) {
 
 	var refCtxAwsConfig aws.Config
@@ -97,7 +65,7 @@ func (ref *SQG) JoinTheQueue() (*string, error) {
 	var messageOutput *sqs.SendMessageOutput
 	var idmessage *string
 
-	mErr, strContentMessageBody := ref.serializeStruct()
+	mErr, strContentMessageBody := ref.parseStruct()
 
 	if mErr == nil {
 
@@ -129,14 +97,20 @@ func (ref *SQG) JoinTheQueue() (*string, error) {
 	return idmessage, mErr
 }
 
-//
-func (ref *SQG) getDeleteMessage(iQtGetMsgProcess int, v any) bool {
+// getDeleteMessage Recupera a mensagem da fila SQS
+// contentRef: Referência do Conteúdo da Mensagem
+// dataAttrRef: Dados de cabeçalho da Mensagem
+// reviewMessageOK: Informa se ocorreu leitura de uma mensagem
+// deleteMessageOk: Informa se a mensagem foi deletada
+// errorGetDelMessage: Erro de processamento
+func (ref *SQG) getDeleteMessage(contentRef interface{}, dataAttrRef interface{}) (reviewMessageOK bool, deleteMessageOk bool, errorGetDelMessage error) {
 	var iErr error
 	var refCtxAwsConfig aws.Config
 	var client *sqs.Client
 	var urlRef *sqs.GetQueueUrlOutput
 	var messagesOutput *sqs.ReceiveMessageOutput
-	var reviewMessage bool = true
+	var reviewMessage bool = false
+	var deleteMessageOK bool = false
 
 	refCtxAwsConfig, iErr = config.LoadDefaultConfig(context.TODO())
 
@@ -157,50 +131,61 @@ func (ref *SQG) getDeleteMessage(iQtGetMsgProcess int, v any) bool {
 				MessageAttributeNames: []string{
 					string(types.QueueAttributeNameAll),
 				},
-				QueueUrl: strQueueURL,
+				QueueUrl:            strQueueURL,
+				MaxNumberOfMessages: int32(1),
 			}
 
-			for i := 0; i <= iQtGetMsgProcess; i++ {
+			messagesOutput, iErr = client.ReceiveMessage(context.TODO(), receiveMessages)
 
-				messagesOutput, iErr = client.ReceiveMessage(context.TODO(), receiveMessages)
+			if iErr == nil {
 
-				if iErr == nil {
+				var mMessages []types.Message = messagesOutput.Messages
 
-					var mMessages []types.Message = messagesOutput.Messages
+				if mMessages != nil {
+					var strReceiptBody *string = mMessages[0].Body
+					var mapAtributes map[string]types.MessageAttributeValue = mMessages[0].MessageAttributes
+					var strReceiptHandler *string = mMessages[0].ReceiptHandle
 
-					if mMessages != nil {
-						var strReceiptBody *string = mMessages[0].Body
-						var strReceiptHandler *string = mMessages[0].ReceiptHandle
+					unMarshalError := messagequeue.ReturnData(contentRef, dataAttrRef, mapAtributes, []byte(*strReceiptBody))
 
-						ref.deserializeStruct(*strReceiptBody)
-
+					if unMarshalError == nil {
 						var deleteMessageInput *sqs.DeleteMessageInput = &sqs.DeleteMessageInput{
 							QueueUrl:      strQueueURL,
 							ReceiptHandle: strReceiptHandler,
 						}
 
-						client.DeleteMessage(context.TODO(), deleteMessageInput)
+						reviewMessage = true
+
+						_, delError := client.DeleteMessage(context.TODO(), deleteMessageInput)
+
+						if delError == nil {
+							deleteMessageOK = true
+						}
 
 					} else {
-						break
+						iErr = unMarshalError
 					}
 
-				} else {
-					// Implementar aqui um tratamento de erro
-					fmt.Println("Ocorreu um ero na obtencao da mensagem")
 				}
 
+			} else {
+				var strMessageError = fmt.Sprintf(util.NOT_FOUND_MESSAGE_PROCESS, iErr.Error())
+				iErr = errors.New(strMessageError)
 			}
 
 		}
 
 	}
 
-	return reviewMessage
+	return reviewMessage, deleteMessageOK, iErr
 }
 
-// GetMessage:
-// EM PROCESSO DE DESENVOLVIMENTO
-func (ref *SQG) GetMessages(qtMessages int, v any) {
-	ref.getDeleteMessage(qtMessages, v)
+// GetMessage Obtêm a mensagem da fila e é um Wrapper para a func getDeleteMessage
+// contentRef: Referência do Conteúdo da Mensagem
+// dataAttrRef: Dados de cabeçalho da Mensagem
+// reviewMessageOK: Informa se ocorreu leitura de uma mensagem
+// deleteMessageOk: Informa se a mensagem foi deletada
+// errorGetDelMessage: Erro de processamento
+func (ref *SQG) GetMessage(contentRef interface{}, dataAttrRef interface{}) (reviewMessageOK bool, deleteMessageOk bool, errorGetDelMessage error) {
+	return ref.getDeleteMessage(contentRef, dataAttrRef)
 }

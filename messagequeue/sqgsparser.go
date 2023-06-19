@@ -1,7 +1,9 @@
 package messagequeue
 
 import (
+	"encoding/json"
 	"errors"
+	"fmt"
 	"reflect"
 
 	"github.com/Pinablink/sqg/util"
@@ -73,4 +75,63 @@ func ParserMessage(irefstruct interface{}) (map[string]types.MessageAttributeVal
 	}
 
 	return mAttributes, iError
+}
+
+//
+func supportUnmarshal(dataAttrRef interface{}, attrMap map[string]string) error {
+	var strJsonSupport string = "{%s}"
+	var strJsonAttrValue string = "\"%s\":\"%s\"%s"
+	var strJsonOb string = ""
+	i := 0
+
+	for k := range attrMap {
+
+		if i == (len(attrMap) - 1) {
+			strJsonOb += fmt.Sprintf(strJsonAttrValue, k, attrMap[k], "")
+		} else {
+			strJsonOb += fmt.Sprintf(strJsonAttrValue, k, attrMap[k], ",")
+		}
+
+		i++
+	}
+
+	strJsonOb = fmt.Sprintf(strJsonSupport, strJsonOb)
+
+	return json.Unmarshal([]byte(strJsonOb), dataAttrRef)
+
+}
+
+//
+func ReturnData(contentRef interface{}, dataAttrRef interface{}, attrMap map[string]types.MessageAttributeValue, input []byte) error {
+
+	err := json.Unmarshal(input, contentRef)
+
+	if err == nil {
+
+		var refMapRemap map[string]string = make(map[string]string)
+		var refType reflect.Type = reflect.TypeOf(dataAttrRef)
+		var refElement reflect.Type = refType.Elem()
+		var numField int = refElement.NumField()
+
+		if numField > 0 {
+
+			var indexControl int = 0
+			var itStructField reflect.StructField
+			var strKey string
+			var valueMap types.MessageAttributeValue
+
+			for ; indexControl < numField; indexControl++ {
+				itStructField = refElement.Field(indexControl)
+				strKey = itStructField.Tag.Get("SQGS")
+				valueMap = attrMap[strKey]
+				refMapRemap[strKey] = *valueMap.StringValue
+			}
+
+			return supportUnmarshal(dataAttrRef, refMapRemap)
+
+		}
+
+	}
+
+	return err
 }
