@@ -1,5 +1,9 @@
 # sqg
 
+![GitHub go.mod Go version](https://img.shields.io/github/go-mod/go-version/Pinablink/tmdbGoTutorial?style=plastic)
+![Alt text](https://img.shields.io/badge/AWS-SQS-blue?style=plastic)
+
+
 É uma lib escrita em linguagem **Golang** e tem como objetivo, abstrair algumas configurações para o SQS da AWS. Desse modo toda a atenção e empenho podem estar na codificação da sua solução especifica.
 
 ### Pontos de desenvolvimento
