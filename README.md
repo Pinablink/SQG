@@ -8,8 +8,8 @@
 
 ### Pontos de desenvolvimento
 
-Uso da Lib da AWS
-Uso do conceito de **reflection** e **manipulação do stream** dos dados 
+* Uso da Lib da AWS
+* Uso do conceito de **reflection** e **manipulação do stream** dos dados 
 
 ### Dependências
 
